@@ -1,3 +1,504 @@
-{
-  "command": "cat \"/Users/stevenmac/Library/Application Support/Genspark Claw/users/a30925b8-17cd-48e4-8fde-c80aa25d93c7/workspace/photo-renamer/index.html\" | pbcopy && echo \"已複製到剪貼簿 ✅\""
-}
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>批次照片重新命名工具</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #007aff;
+      --blue-hover: #0062cc;
+      --red: #ff3b30;
+      --green: #34c759;
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --border: #d1d1d6;
+      --muted: #8e8e93;
+      --text: #1d1d1f;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px 20px 60px;
+    }
+
+    .container { max-width: 860px; margin: 0 auto; }
+
+    header { margin-bottom: 28px; }
+    header h1 { font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    header p  { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+    /* ─── CARD ─── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    /* ─── UPLOAD ─── */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 44px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      background: #fafafa;
+      user-select: none;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--blue);
+      background: #f0f6ff;
+    }
+    .drop-zone .icon { font-size: 44px; line-height: 1; margin-bottom: 10px; }
+    .drop-zone .label { font-size: 15px; color: #444; }
+    .drop-zone .label strong { color: var(--blue); }
+    .drop-zone .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    #fileInput { display: none; }
+
+    /* ─── PREFIX ─── */
+    .prefix-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .prefix-row label { font-weight: 600; font-size: 14px; white-space: nowrap; }
+    .prefix-row input {
+      flex: 1;
+      min-width: 200px;
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .prefix-row input:focus { border-color: var(--blue); }
+    .format-preview {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .format-preview span { color: var(--blue); font-weight: 600; }
+
+    /* ─── FILE LIST ─── */
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .badge {
+      background: var(--blue);
+      color: #fff;
+      border-radius: 20px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .file-list { display: flex; flex-direction: column; gap: 7px; }
+    .empty-state {
+      text-align: center;
+      padding: 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: #f9f9fb;
+      font-size: 13px;
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:translateY(0) } }
+
+    .thumb {
+      width: 42px; height: 42px;
+      object-fit: cover;
+      border-radius: 5px;
+      flex-shrink: 0;
+      background: #eee;
+    }
+    .thumb-placeholder {
+      width: 42px; height: 42px;
+      border-radius: 5px;
+      background: #e5e5ea;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .names { flex: 1; min-width: 0; }
+    .name-orig {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .name-new {
+      font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .file-size { color: var(--muted); font-size: 12px; flex-shrink: 0; }
+    .remove-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--red);
+      font-size: 17px;
+      padding: 4px;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: .7;
+      transition: opacity .15s;
+    }
+    .remove-btn:hover { opacity: 1; }
+
+    /* ─── ACTION BAR ─── */
+    .action-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      padding: 11px 22px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background .15s, opacity .15s;
+    }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-hover); }
+    .btn-primary:disabled { background: #c7c7cc; cursor: not-allowed; }
+    .btn-ghost { background: #f0f0f5; color: var(--text); }
+    .btn-ghost:hover { background: #e5e5ea; }
+
+    .status { font-size: 13px; color: var(--muted); }
+    .status.success { color: var(--green); font-weight: 600; }
+    .status.error   { color: var(--red); }
+
+    /* ─── WARNING BANNER ─── */
+    .warn {
+      display: none;
+      background: #fff8e1;
+      border-left: 3px solid #f0a500;
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 13px;
+      color: #7a5500;
+      margin-bottom: 16px;
+    }
+
+    /* progress bar */
+    .progress-wrap {
+      display: none;
+      height: 4px;
+      background: #e5e5ea;
+      border-radius: 2px;
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 2px;
+      transition: width .25s;
+      width: 0%;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>🖼️ 批次照片重新命名工具</h1>
+    <p>上傳多張照片 → 設定前綴文字 → 批次另存新檔，不壓縮、不改變尺寸</p>
+  </header>
+
+  <div class="warn" id="warnBanner">
+    ⚠️ 您的瀏覽器不支援「選擇儲存資料夾」功能，將改為逐一下載。建議使用 <strong>Chrome</strong> 或 <strong>Edge</strong> 以獲得完整體驗。
+  </div>
+
+  <!-- 上傳區 -->
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">📂</div>
+      <p class="label"><strong>點擊選擇</strong>或拖曳照片至此</p>
+      <p class="hint">支援 JPG、PNG、WEBP、GIF、HEIC、TIFF、BMP 等格式，可一次選取多張</p>
+    </div>
+    <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif,.tiff,.tif,.bmp,.raw,.cr2,.nef,.arw,.dng" />
+  </div>
+
+  <!-- 前綴設定 -->
+  <div class="card">
+    <div class="card-title">✏️ 命名前綴設定</div>
+    <div class="prefix-row">
+      <label for="prefixInput">前綴文字</label>
+      <input type="text" id="prefixInput" placeholder="例如：2024京都旅遊_" autocomplete="off" />
+    </div>
+    <p class="format-preview">輸出格式：<span id="fmtPreview">前綴文字 + 原始檔名</span></p>
+  </div>
+
+  <!-- 檔案清單 -->
+  <div class="card">
+    <div class="list-header">
+      <div class="card-title" style="margin-bottom:0">
+        📋 已載入檔案 <span class="badge" id="countBadge">0</span>
+      </div>
+      <span id="totalSize" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="file-list" id="fileList">
+      <div class="empty-state">尚未上傳任何檔案</div>
+    </div>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <!-- 動作列 -->
+  <div class="card">
+    <div class="action-bar">
+      <button class="btn btn-ghost" onclick="clearAll()">🗑 清除全部</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="batchSave()" disabled>💾 批次另存新檔</button>
+      <span class="status" id="statusMsg"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────
+  let files = [];   // Array of File objects
+
+  // ── DOM refs ───────────────────────────────────────────────────────
+  const dropZone    = document.getElementById('dropZone');
+  const fileInput   = document.getElementById('fileInput');
+  const prefixInput = document.getElementById('prefixInput');
+  const fileList    = document.getElementById('fileList');
+  const countBadge  = document.getElementById('countBadge');
+  const totalSizeEl = document.getElementById('totalSize');
+  const saveBtn     = document.getElementById('saveBtn');
+  const statusMsg   = document.getElementById('statusMsg');
+  const fmtPreview  = document.getElementById('fmtPreview');
+  const progressWrap= document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  const warnBanner  = document.getElementById('warnBanner');
+
+  // ── Browser support check ──────────────────────────────────────────
+  const hasDirPicker = 'showDirectoryPicker' in window;
+  if (!hasDirPicker) warnBanner.style.display = 'block';
+
+  // ── Upload events ──────────────────────────────────────────────────
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  });
+
+  fileInput.addEventListener('change', e => {
+    addFiles(e.target.files);
+    fileInput.value = '';
+  });
+
+  prefixInput.addEventListener('input', () => {
+    updateFormatPreview();
+    renderList();
+  });
+
+  // ── Core helpers ───────────────────────────────────────────────────
+  function addFiles(newFiles) {
+    for (const f of newFiles) files.push(f);
+    renderList();
+    updateUI();
+  }
+
+  function getNewName(file) {
+    return prefixInput.value + file.name;
+  }
+
+  function formatBytes(b) {
+    if (b < 1024)           return b + ' B';
+    if (b < 1024 * 1024)    return (b / 1024).toFixed(1) + ' KB';
+    return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function updateFormatPreview() {
+    const p = prefixInput.value;
+    fmtPreview.textContent = p ? `"${p}" + 原始檔名` : '前綴文字 + 原始檔名';
+  }
+
+  function updateUI() {
+    countBadge.textContent = files.length;
+    saveBtn.disabled = files.length === 0;
+
+    const total = files.reduce((s, f) => s + f.size, 0);
+    totalSizeEl.textContent = files.length > 0 ? `共 ${formatBytes(total)}` : '';
+  }
+
+  function renderList() {
+    if (files.length === 0) {
+      fileList.innerHTML = '<div class="empty-state">尚未上傳任何檔案</div>';
+      return;
+    }
+
+    fileList.innerHTML = files.map((f, i) => `
+      <div class="file-item" id="fi-${i}">
+        ${f.type.startsWith('image/')
+          ? `<img class="thumb" id="thumb-${i}" alt="" />`
+          : `<div class="thumb-placeholder">📄</div>`}
+        <div class="names">
+          <div class="name-orig">原始：${escHtml(f.name)}</div>
+          <div class="name-new">→ ${escHtml(getNewName(f))}</div>
+        </div>
+        <span class="file-size">${formatBytes(f.size)}</span>
+        <button class="remove-btn" onclick="removeFile(${i})" title="移除此檔案">✕</button>
+      </div>
+    `).join('');
+
+    // Load thumbnails async
+    files.forEach((f, i) => {
+      if (!f.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const el = document.getElementById(`thumb-${i}`);
+        if (el) el.src = e.target.result;
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function removeFile(i) {
+    files.splice(i, 1);
+    renderList();
+    updateUI();
+  }
+
+  function clearAll() {
+    files = [];
+    renderList();
+    updateUI();
+    setStatus('', '');
+  }
+
+  function setStatus(msg, cls) {
+    statusMsg.textContent = msg;
+    statusMsg.className = 'status ' + (cls || '');
+  }
+
+  function setProgress(pct) {
+    progressWrap.style.display = pct === null ? 'none' : 'block';
+    if (pct !== null) progressBar.style.width = pct + '%';
+  }
+
+  // ── Batch Save ─────────────────────────────────────────────────────
+  async function batchSave() {
+    if (files.length === 0) return;
+
+    if (hasDirPicker) {
+      await saveWithDirPicker();
+    } else {
+      await saveWithDownload();
+    }
+  }
+
+  // Chrome / Edge: let user pick destination folder
+  async function saveWithDirPicker() {
+    let dirHandle;
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'pictures' });
+    } catch (e) {
+      if (e.name === 'AbortError') { setStatus('已取消', ''); return; }
+      setStatus('無法開啟資料夾：' + e.message, 'error'); return;
+    }
+
+    saveBtn.disabled = true;
+    setProgress(0);
+    let saved = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const newName = getNewName(file);
+      setStatus(`儲存中… ${i + 1} / ${files.length}`, '');
+      setProgress(Math.round((i / files.length) * 100));
+
+      try {
+        const fh = await dirHandle.getFileHandle(newName, { create: true });
+        const writable = await fh.createWritable();
+        // Write raw bytes — no transcoding, no compression
+        await writable.write(file);
+        await writable.close();
+        saved++;
+      } catch (err) {
+        console.error('Failed:', newName, err);
+      }
+    }
+
+    setProgress(100);
+    setTimeout(() => setProgress(null), 600);
+    setStatus(`✅ 已成功儲存 ${saved} 個檔案！`, 'success');
+    saveBtn.disabled = false;
+  }
+
+  // Firefox / Safari fallback: trigger individual downloads
+  async function saveWithDownload() {
+    saveBtn.disabled = true;
+    setProgress(0);
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const newName = getNewName(file);
+      setStatus(`下載中… ${i + 1} / ${files.length}`, '');
+      setProgress(Math.round((i / files.length) * 100));
+
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url; a.download = newName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      await sleep(400);   // slight delay to avoid browser blocking
+      URL.revokeObjectURL(url);
+    }
+
+    setProgress(100);
+    setTimeout(() => setProgress(null), 600);
+    setStatus(`✅ 已觸發 ${files.length} 個檔案下載`, 'success');
+    saveBtn.disabled = false;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // Initial state
+  updateFormatPreview();
+</script>
+</body>
+</html>
